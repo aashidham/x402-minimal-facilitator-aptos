@@ -1,0 +1,15 @@
+{
+  "name": "x402-minimal-facilitator",
+  "version": "1.0.0",
+  "description": "Minimal x402 facilitator for Aptos testnet",
+  "main": "facilitator.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env.local facilitator.js"
+  },
+  "dependencies": {
+    "@aptos-labs/ts-sdk": "^5.2.1",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0"
+  }
+}
