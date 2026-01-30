@@ -223,3 +223,91 @@ aptos account fund-with-faucet \
 - In production, add rate limiting and authentication
 - Consider separating verify/settle for better control
 - Monitor fee payer balance to avoid failed transactions
+
+## Comparison to Official x402 Implementation
+
+This minimal facilitator is a simplified, single-file version of the Aptos facilitator in the official [x402 repository](https://github.com/aptos-labs/x402).
+
+### Structure Comparison
+
+| Aspect | Official x402 (`github.com/aptos-labs/x402`) | This Repo |
+|--------|----------------------------------------------|-----------|
+| **Framework** | Next.js App Router | Express.js |
+| **Language** | TypeScript | JavaScript |
+| **Code Organization** | Modular packages (`@x402/core`, `@x402/aptos`) | Single file (`facilitator.js`) |
+| **Hooks System** | Yes (`onBeforeVerify`, `onAfterSettle`, etc.) | No |
+| **Lines of Code** | ~800+ across multiple files | ~350 in one file |
+
+### Official x402 Structure
+
+```
+# From https://github.com/aptos-labs/x402
+
+typescript/
+├── packages/
+│   ├── core/src/facilitator/x402Facilitator.ts    # Base orchestrator with hooks
+│   └── mechanisms/aptos/src/exact/facilitator/
+│       └── scheme.ts                               # Aptos verify/settle logic
+└── site/app/facilitator/
+    ├── index.ts           # Creates facilitator instance
+    ├── verify/route.ts    # Next.js API route (thin wrapper)
+    ├── settle/route.ts    # Next.js API route (thin wrapper)
+    └── supported/route.ts
+```
+
+### Key Differences
+
+| Feature | Official x402 (`github.com/aptos-labs/x402`) | This Repo |
+|---------|-----------------------------------------------|-----------|
+| **Scheme Registration** | `facilitator.register("aptos:2", new ExactAptosScheme(signer))` | Hardcoded in functions |
+| **Network Matching** | Dynamic CAIP pattern matching (`aptos:*`) | Hardcoded `aptos:2` |
+| **Signer Abstraction** | `FacilitatorAptosSigner` interface | Direct `Account` usage |
+| **Hooks** | Before/after verify & settle, failure recovery | None |
+| **Extensions** | Supported via `registerExtension()` | Not supported |
+| **V1 Compatibility** | `registerV1()` for legacy clients | Not supported |
+
+### Verification Logic (Nearly Identical)
+
+Both implementations validate the same things in the same order:
+
+1. Scheme is "exact"
+2. Network matches requirements
+3. Transaction calls `0x1::primary_fungible_store::transfer`
+4. Type arguments length = 1 (Metadata type)
+5. Function arguments = 3 (asset, recipient, amount)
+6. Asset address matches
+7. Recipient address matches
+8. Amount matches
+9. Transaction simulation succeeds
+
+### Verify Called Inside Settle (Both Implementations)
+
+Both call verify internally when settling:
+
+**Official x402** (from `github.com/aptos-labs/x402`, `packages/mechanisms/aptos/src/exact/facilitator/scheme.ts:233`):
+```typescript
+const valid = await this.verify(payload, requirements);
+if (!valid.isValid) { return { success: false, ... }; }
+```
+
+**This repo** (`facilitator.js:187`):
+```javascript
+const verifyResult = await verifyPayment(paymentPayload, paymentRequirements);
+if (!verifyResult.isValid) { return { success: false, ... }; }
+```
+
+This means `/verify` is technically optional if you always call `/settle`.
+
+### When to Use Which
+
+**Use this repo when:**
+- Learning how x402 works
+- Building a simple Aptos-only integration
+- Prototyping or hackathons
+- You want to understand every line of code
+
+**Use the official x402 (`github.com/aptos-labs/x402`) when:**
+- Building production systems
+- You need hooks for logging, rate limiting, or custom validation
+- You want TypeScript type safety
+- You need protocol extensions or V1 compatibility
